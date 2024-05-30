@@ -26,9 +26,6 @@ class Index extends \Magento\Backend\App\Action
 
     /**
      * Constructor
-     *
-     * @param \Magento\Backend\App\Action\Context $context
-     * @param \Magento\Framework\View\Result\PageFactory $resultPageFactory
      */
     public function __construct(
         Context $context,
@@ -52,72 +49,93 @@ class Index extends \Magento\Backend\App\Action
      */
     public function execute()
     {
-        // $path = $this->moduleDir->getDir('AHT_ImportShopifyDiscount');
-        // if (($handle = fopen($path . "/discounts_exports.csv", "r")) !== FALSE) {
-        //     $row = 1;
-        //     while (($data = fgetcsv($handle, null, ",")) !== FALSE) {
-        //         $num = count($data);
-        //         $row++;
-        //         for ($i = 0; $i < $num; $i++) {
-        //             //insertdb
-        //         }
-        //     }
-        //     fclose($handle);
-        // }
+        $path = $this->moduleDir->getDir('AHT_ImportShopifyDiscount');
 
         $customerGroups = [];
         foreach($this->customerGroup->toOptionArray() as $item) {
             $customerGroups[] = $item['value'];
         }
 
-        /**
-         * @var Magento\SalesRule\Model\Rule
-         */
-        $shoppingCartPriceRule = $this->_objectManager->create('Magento\SalesRule\Model\Rule');
-        $shoppingCartPriceRule->setName("1")
-            ->setDescription('')
-            ->setFromDate('2024-05-26')
-            ->setToDate('')
-            ->setUsesPerCustomer(1)
-            ->setCustomerGroupIds($customerGroups)
-            ->setIsActive(1)
-            // by_percent, by_fixed, cart_fixed, buy_x_get_y
-            ->setSimpleAction('by_fixed')
-            ->setDiscountAmount(5)
-            ->setDiscountQty(0)
-            /**
-             * 0: No
-             * 1: For matching items only
-             * 2: For shipments with matching items
-             */
-            ->setApplyToShipping(0)
-            ->setTimesUsed(0)
-            ->setWebsiteIds(['1'])
-            ->setCouponType(2)
-            ->setCouponCode("1")
-            ->setUsesPerCoupon(1);
+        if (($handle = fopen($path . "/discounts_exports.csv", "r")) !== FALSE) {
+            $row = 0;
+            while (($data = fgetcsv($handle, null, ",")) !== FALSE) {
+                $row++;
+                if ($row == 1) {
+                    continue;
+                }
 
-        $shoppingCartPriceRule->getConditions()->loadArray(
-            [
-                'type' => Combine::class,
-                'attribute' => null,
-                'operator' => null,
-                'value' => '1',
-                'is_value_processed' => null,
-                'aggregator' => 'all',
-                'conditions' => [
-                        [
-                            'type' => Address::class,
-                            'attribute' => 'base_subtotal',
-                            'operator' => '>=',
-                            'value' => 150,
-                            'is_value_processed' => false,
-                        ]
-                ],
-            ]
-        );
-        
-        $shoppingCartPriceRule->save();
+                try {
+                    /**
+                     * @var Magento\SalesRule\Model\Rule
+                     */
+                    $shoppingCartPriceRule = $this->_objectManager->create('Magento\SalesRule\Model\Rule');
+
+                    $shoppingCartPriceRule->setName($data[0])
+                        ->setDescription('')
+                        ->setFromDate($data[14])
+                        ->setToDate($data[15])
+                        ->setUsesPerCustomer($data[11])
+                        //unclear prequisite group in source data
+                        ->setCustomerGroupIds($customerGroups)
+                        ->setIsActive($data[13] == 'Active' ? 1 : 0)
+                        // by_percent, by_fixed, cart_fixed, buy_x_get_y
+                        ->setSimpleAction($data[2] == 'fixed_amount' ? 'cart_fixed' : 'by_percent')
+                        ->setDiscountAmount(abs((int)$data[1]))
+                        ->setDiscountQty(0)
+                        /**
+                         * 0: No
+                         * 1: For matching items only
+                         * 2: For shipments with matching items
+                         */
+                        ->setApplyToShipping(0)
+                        ->setTimesUsed($data[10])
+                        //current site id wrapped in an array
+                        ->setWebsiteIds(['1'])
+                        /**
+                         * 1: No Coupon
+                         * 2: Specific Coupon
+                         */
+                        ->setCouponType(2)
+                        ->setCouponCode($data[0])
+                        ->setUsesPerCoupon($data[12]);
+
+                    //Minimum purchase requirement
+                    if ($data[5] != null) {
+                        $shoppingCartPriceRule->getConditions()->loadArray(
+                            [
+                                'type' => Combine::class,
+                                'attribute' => null,
+                                'operator' => null,
+                                'value' => '1',
+                                'is_value_processed' => null,
+                                'aggregator' => 'all',
+                                'conditions' => [
+                                        [
+                                            'type' => Address::class,
+                                            'attribute' => 'base_subtotal',
+                                            'operator' => '>=',
+                                            'value' => $data[5],
+                                            'is_value_processed' => false,
+                                        ]
+                                ],
+                            ]
+                        );
+                    }
+                        
+                    $shoppingCartPriceRule->save();
+                } catch (\Exception $e) {
+                    $this->messageManager->addErrorMessage(__('Error in row ' . $row));
+
+                    $writer = new \Zend_Log_Writer_Stream(BP . '/var/log/custom.log');
+                    $logger = new \Zend_Log();
+                    $logger->addWriter($writer);
+                    $logger->info('Error in row: ' . $row . '. Name: ' . $data[0]);
+                    $logger->info('Exception: ' . $e->getMessage());
+                    $logger->info('--------------------------------------------------------------------------------------------------');
+                }
+            }
+            fclose($handle);
+        }
 
         $this->messageManager->addSuccessMessage(__('Success'));
         $resultPage = $this->resultPageFactory->create();

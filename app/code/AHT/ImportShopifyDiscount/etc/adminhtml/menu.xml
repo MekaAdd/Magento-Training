@@ -2,6 +2,7 @@
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Backend:etc/menu.xsd">
 	<menu>
 		<add id="AHT::top_level" title="AHT" module="AHT_ImportShopifyDiscount" sortOrder="9999" resource="Magento_Backend::content"/>
-		<add id="AHT_ImportShopifyDiscount::aht_isd_import" title="Import" module="AHT_ImportShopifyDiscount" sortOrder="9999" resource="Magento_Backend::content" parent="AHT::top_level" action="aht_isd/import/index"/>
-	</menu>
+		<add id="AHT_ImportShopifyDiscount::aht_isd_import" title="Import" module="AHT_ImportShopifyDiscount" sortOrder="0" resource="Magento_Backend::content" parent="AHT::top_level" action="aht_isd/import/index"/>
+		<add id="AHT_ImportShopifyDiscount::aht_isd_delete" title="Delete" module="AHT_ImportShopifyDiscount" sortOrder="1" resource="Magento_Backend::content" parent="AHT::top_level" action="aht_isd/import/delete"/>	
+    </menu>
 </config>
